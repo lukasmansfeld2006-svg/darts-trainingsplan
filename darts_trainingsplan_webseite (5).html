@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Darts Trainingsplan 335</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{ --glass: rgba(2,6,23,.72); }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        linear-gradient(rgba(2,6,23,.75), rgba(2,6,23,.75)),
+        url('https://images.unsplash.com/photo-1518544801976-7f2e5d4f0baf?q=80&w=1920&auto=format&fit=crop');
+      background-size: cover; background-attachment: fixed; color:#e5e7eb; padding:20px;
+    }
+    h1, h2, h3 { color:#f8fafc; }
+    .card { background:var(--glass); backdrop-filter: blur(6px); border-radius:16px; padding:16px; margin-bottom:20px; box-shadow:0 10px 25px rgba(0,0,0,.35); }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom:1px solid #1f2933; padding:6px; text-align:center; }
+    input[type=number] { width:60px; padding:4px; border-radius:8px; border:1px solid #334155; background:#020617; color:#e5e7eb; text-align:center; }
+    input[type=checkbox] { transform: scale(1.2); }
+    .sum { font-weight:700; color:#38bdf8; }
+    .meta { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+    .meta input { flex:1; min-width:160px; }
+    .toolbar{ display:flex; gap:8px; flex-wrap:wrap; }
+    button{ background:#0ea5e9; color:#001018; border:none; padding:8px 12px; border-radius:10px; font-weight:700; cursor:pointer }
+    button.secondary{ background:#1f2937; color:#e5e7eb }
+    button.danger{ background:#ef4444; color:#0b0b0b }
+    select{ background:#020617; color:#e5e7eb; border:1px solid #334155; border-radius:10px; padding:8px }
+    .small{ opacity:.8; font-size:12px }
+    .modal{ position:fixed; inset:0; background:rgba(2,6,23,.8); display:none; align-items:center; justify-content:center; }
+    .modal .card{ max-width:900px; width:95%; }
+    canvas{ width:100%; height:260px; background:#020617; border-radius:12px }
+  </style>
+</head>
+<body>
+  <h1>Darts Trainingsplan 335</h1>
+
+  <div class="card meta">
+    <input id="player" placeholder="Spieler" />
+    <input id="date" type="date" />
+    <div class="toolbar">
+      <button id="save">Durchgang speichern</button>
+      <button id="load" class="secondary">Laden</button>
+      <button id="del" class="danger">Löschen</button>
+      <button id="stats" class="secondary">Statistik</button>
+      <select id="history"></select>
+    </div>
+    <div class="small">Gespeichert wird lokal im Browser.</div>
+  </div>
+
+  <div id="app"></div>
+
+  <div class="card">
+    <h2>Endergebnis</h2>
+    <p>Gesamtpunkte: <span id="grandTotal" class="sum">0</span> / 1260</p>
+  </div>
+
+  <div id="modal" class="modal">
+    <div class="card">
+      <div class="toolbar" style="justify-content:space-between">
+        <h2>Statistik</h2>
+        <button id="close" class="secondary">Schließen</button>
+      </div>
+      <canvas id="chart" width="800" height="260"></canvas>
+      <div id="summary" class="small"></div>
+    </div>
+  </div>
+
+<script>
+const app = document.getElementById('app');
+let allSums = [];
+
+function makeBull() {
+  const card = document.createElement('div'); card.className='card';
+  card.innerHTML = `<h2>1. Bull (7 Runden)</h2>
+  <p>Single Bull = 4 Punkte, Double Bull = 6 Punkte</p>
+  <table>
+    <tr><th>Runde</th><th>SB</th><th>DB</th><th>Punkte</th></tr>
+    ${Array.from({length:7},(_,i)=>`<tr>
+      <td>${i+1}</td>
+      <td><input type='number' min='0' max='3' data-sb></td>
+      <td><input type='number' min='0' max='3' data-db></td>
+      <td class='rowSum'>0</td>
+    </tr>`).join('')}
+  </table>
+  <p>Summe: <span class='sum total'>0</span></p>`;
+  app.appendChild(card);
+  bindBull(card);
+}
+
+function bindBull(card){
+  const totalEl = card.querySelector('.total');
+  const rows = card.querySelectorAll('tr');
+  function update(){
+    let sum=0;
+    rows.forEach(r=>{
+      const sb = r.querySelector('[data-sb]');
+      const db = r.querySelector('[data-db]');
+      if(!sb) return;
+      const pts = (Number(sb.value||0)*4) + (Number(db.value||0)*6);
+      r.querySelector('.rowSum').textContent = pts;
+      sum+=pts;
+    });
+    totalEl.textContent=sum;
+    allSums[0]=sum; updateGrand();
+  }
+  card.querySelectorAll('input').forEach(i=>i.addEventListener('input',update));
+  update();
+}
+
+function makeSDT(title, index){
+  const card = document.createElement('div'); card.className='card';
+  card.innerHTML = `<h2>${title}</h2>
+  <p>Single = 2, Double = 4, Triple = 6</p>
+  <table>
+    <tr><th>Runde</th><th>S</th><th>D</th><th>T</th><th>Punkte</th></tr>
+    ${Array.from({length:7},(_,i)=>`<tr>
+      <td>${i+1}</td>
+      <td><input type='number' min='0' max='3' data-s></td>
+      <td><input type='number' min='0' max='3' data-d></td>
+      <td><input type='number' min='0' max='3' data-t></td>
+      <td class='rowSum'>0</td>
+    </tr>`).join('')}
+  </table>
+  <p>Summe: <span class='sum total'>0</span></p>`;
+  app.appendChild(card);
+
+  const totalEl = card.querySelector('.total');
+  const rows = card.querySelectorAll('tr');
+  function update(){
+    let sum=0;
+    rows.forEach(r=>{
+      const s=r.querySelector('[data-s]'); if(!s) return;
+      const d=r.querySelector('[data-d]');
+      const t=r.querySelector('[data-t]');
+      const pts=(Number(s.value||0)*2)+(Number(d.value||0)*4)+(Number(t.value||0)*6);
+      r.querySelector('.rowSum').textContent=pts; sum+=pts;
+    });
+    totalEl.textContent=sum; allSums[index]=sum; updateGrand();
+  }
+  card.querySelectorAll('input').forEach(i=>i.addEventListener('input',update));
+  update();
+}
+
+function makeHits(title, targets, points, index){
+  const card=document.createElement('div'); card.className='card';
+  card.innerHTML=`<h2>${title}</h2>
+  <table>
+    <tr>${targets.map(t=>`<th>${t}</th>`).join('')}<th>Summe</th></tr>
+    <tr>
+      ${targets.map(()=>`<td><input type='number' min='0'></td>`).join('')}
+      <td class='rowSum'>0</td>
+    </tr>
+  </table>
+  <p>Punkte pro Treffer: ${points}</p>
+  <p>Summe: <span class='sum total'>0</span></p>`;
+  app.appendChild(card);
+  const inputs=card.querySelectorAll('input');
+  const rowSum=card.querySelector('.rowSum');
+  const totalEl=card.querySelector('.total');
+  function update(){
+    let hits=0; inputs.forEach(i=>hits+=Number(i.value||0));
+    const pts=hits*points;
+    rowSum.textContent=pts; totalEl.textContent=pts;
+    allSums[index]=pts; updateGrand();
+  }
+  inputs.forEach(i=>i.addEventListener('input',update)); update();
+}
+
+function makeCheck(){
+  const nums=[41,52,63,74,56,67,49,61,43,54,65,47,69,70];
+  const card=document.createElement('div'); card.className='card';
+  card.innerHTML=`<h2>8. Check (Double Out)</h2>
+  <p>Geschafft = 9 Punkte</p>
+  <table>
+    <tr><th>Zahl</th><th>Geschafft</th></tr>
+    ${nums.map(n=>`<tr><td>${n}</td><td><input type='checkbox'></td></tr>`).join('')}
+  </table>
+  <p>Summe: <span class='sum total'>0</span></p>`;
+  app.appendChild(card);
+  const boxes=card.querySelectorAll('input');
+  const totalEl=card.querySelector('.total');
+  function update(){
+    let ok=0; boxes.forEach(b=>{if(b.checked) ok++;});
+    const pts=ok*9; totalEl.textContent=pts; allSums[7]=pts; updateGrand();
+  }
+  boxes.forEach(b=>b.addEventListener('change',update)); update();
+}
+
+function makeScore(title, div, index){
+  const card=document.createElement('div'); card.className='card';
+  card.innerHTML=`<h2>${title}</h2>
+  <p>Score eingeben → Punkte = Score / ${div}</p>
+  <input type='number' id='score${index}' placeholder='Score'>
+  <p>Punkte: <span class='sum total'>0</span></p>`;
+  app.appendChild(card);
+  const input=card.querySelector('input');
+  const totalEl=card.querySelector('.total');
+  function update(){
+    const pts=Math.floor(Number(input.value||0)/div);
+    totalEl.textContent=pts; allSums[index]=pts; updateGrand();
+  }
+  input.addEventListener('input',update); update();
+}
+
+function updateGrand(){
+  const g=allSums.reduce((a,b)=>a+(b||0),0);
+  document.getElementById('grandTotal').textContent=g;
+}
+
+// Build
+makeBull();
+makeSDT('2. Wurf 20',1);
+makeSDT('3. Wurf 19',2);
+makeSDT('4. Radl',3);
+makeHits('5. Single',[25,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1],2,4);
+makeHits('6. Triple',[20,19,18,17,16,15,14,13,12,11,10,9,8,7],3,5);
+makeHits('7. Doppel',[25,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1],2,6);
+makeCheck();
+makeScore('9. Highscore',10,8);
+makeScore('10. Round the Clock',5,9);
+
+// Persistence
+const dateEl=document.getElementById('date');
+const playerEl=document.getElementById('player');
+const history=document.getElementById('history');
+
+function snapshot(){
+  return {
+    player: playerEl.value,
+    date: dateEl.value,
+    total: Number(document.getElementById('grandTotal').textContent||0),
+    sections: allSums.slice(),
+    values: Array.from(document.querySelectorAll('input')).map(i=> i.type==='checkbox' ? i.checked : i.value)
+  };
+}
+function restore(data){
+  const inputs=Array.from(document.querySelectorAll('input'));
+  inputs.forEach((i,idx)=>{
+    if(i.type==='checkbox') i.checked = !!data.values[idx];
+    else i.value = data.values[idx] ?? '';
+  });
+  playerEl.value=data.player||''; dateEl.value=data.date||'';
+  inputs.forEach(i=> i.dispatchEvent(new Event('input')));
+}
+function refreshHistory(){
+  const keys=Object.keys(localStorage).filter(k=>k.startsWith('tp335:')).sort().reverse();
+  history.innerHTML = keys.map(k=>{
+    const d=JSON.parse(localStorage.getItem(k));
+    const name = d?.player ? ` – ${d.player}` : '';
+    const label = `${k.replace('tp335:','')}${name} – ${d?.total ?? 0} Punkte`;
+    return `<option value="${k}">${label}</option>`;
+  }).join('');
+}
+
+document.getElementById('save').onclick=()=>{
+  if(!dateEl.value) return alert('Bitte Datum wählen');
+  const key = 'tp335:' + dateEl.value + ':' + Date.now();
+  localStorage.setItem(key, JSON.stringify(snapshot()));
+  refreshHistory();
+};
+
+document.getElementById('load').onclick=()=>{
+  if(!history.value) return;
+  const data=JSON.parse(localStorage.getItem(history.value));
+  restore(data);
+};
+
+document.getElementById('del').onclick=()=>{
+  if(!history.value) return;
+  if(confirm('Diesen Durchgang wirklich löschen?')){
+    localStorage.removeItem(history.value);
+    refreshHistory();
+  }
+};
+
+// Statistik
+const modal=document.getElementById('modal');
+const canvas=document.getElementById('chart');
+const ctx=canvas.getContext('2d');
+
+document.getElementById('stats').onclick=()=>{
+  modal.style.display='flex'; renderStats();
+};
+document.getElementById('close').onclick=()=> modal.style.display='none';
+
+function renderStats(){
+  const items=Object.keys(localStorage).filter(k=>k.startsWith('tp335:')).map(k=>JSON.parse(localStorage.getItem(k)));
+  if(!items.length){ ctx.clearRect(0,0,canvas.width,canvas.height); return; }
+
+  // Bestes Ergebnis pro Tag
+  const byDate={};
+  items.forEach(i=>{
+    byDate[i.date] = Math.max(byDate[i.date]||0, i.total||0);
+  });
+  const dates=Object.keys(byDate).sort();
+  const values=dates.map(d=>byDate[d]);
+
+  // Draw simple line chart
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const pad=30;
+  const max=Math.max(...values, 1);
+  ctx.strokeStyle='#38bdf8'; ctx.lineWidth=2;
+  ctx.beginPath();
+  values.forEach((v,i)=>{
+    const x=pad + i*( (canvas.width-pad*2)/(values.length-1||1) );
+    const y=canvas.height-pad - (v/max)*(canvas.height-pad*2);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Summary
+  const best=Math.max(...values);
+  const worst=Math.min(...values);
+  const secCount = Math.max(...items.map(i=>i.sections?.length||0));
+  const secStats = Array.from({length:secCount},(_,i)=>{
+    const arr=items.map(it=>it.sections?.[i]).filter(v=>typeof v==='number');
+    return { best: Math.max(...arr), worst: Math.min(...arr) };
+  });
+
+  document.getElementById('summary').innerHTML = `
+    <p><strong>Beste Tagesleistung:</strong> ${best} Punkte · <strong>Schlechteste:</strong> ${worst} Punkte</p>
+    <p><strong>Pro Übung (Best / Schlecht):</strong></p>
+    <ul>${secStats.map((s,i)=>`<li>Übung ${i+1}: ${s.best||0} / ${s.worst||0}</li>`).join('')}</ul>
+  `;
+}
+
+// init
+dateEl.value = new Date().toISOString().slice(0,10);
+refreshHistory();
+</script>
+</body>
+</html>
